@@ -3,6 +3,7 @@
 ### SMOTE stands for the Synthetic Minority Over-sampling Techniques, which works by utilizing a k-nearest neighbor algorithm to create synthetic data for the minority data.
 
 load("~/Downloads/STOR893/FinalProject/STOR-893-Final-Project/Data/merge_df.RData")
+if(!require(imbalance)) { install.packages("imbalance", repos = "http://cran.us.r-project.org"); library("imbalance") }
 
 df_dep<-df[,c(1:121,251)]
 df_dep<-na.omit(df_dep) #1028 obs
