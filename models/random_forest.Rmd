@@ -8,6 +8,7 @@ output: html_document
 library(glmnet)
 library(randomForest)
 library(caret)
+library(rpart)
 ```
 
 # Load Data
@@ -18,7 +19,7 @@ load("../Data/merge_df.RData")
 # Define Random Forest Model
 ```{r}
 rf.fit = function(index_trait, feature = "all"){
-  if(feature == "fc"){
+  if(feature == "fc"){ 
     df.rf = cbind(df[,c(2:61)], df[,121+index_trait])
   }else if(feature == "sc"){
     df.rf = cbind(df[,c(62:121)], df[,121+index_trait])
@@ -35,7 +36,8 @@ rf.fit = function(index_trait, feature = "all"){
   df_train = df.rf[-index,]
   df_test = df.rf[index,]
 
-  # mod.svm = svm(Depressive_Ep~., data = df_train, type = "C-classification", kernel = "radial", cost = 50000, C = 150)
+  
+  
   if(feature == "fc"){
    rf_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
     summary(rf_classifier)
@@ -45,18 +47,17 @@ rf.fit = function(index_trait, feature = "all"){
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3)])
   }else{
-     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, mtry=2, importance=TRUE)
+     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, importance=TRUE)
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3, 61:63)])
   }
 
   
-    conf.mat = NULL
+   
     mse = mean((rf.pred - df_test$Depressive_Ep)^2)
-    accuracy= sum(rf.pred ==df_test$Depressive_Ep)/length(rf.pred)
     
-
-  return(list(mod = rf_classifier, confusion.matrix = conf.mat$table, ratio = conf.mat$byClass, mse = mse,accuracy=accuracy))
+    return(list(mod = rf_classifier, mse = mse))
+  
     
    
 }
@@ -64,12 +65,69 @@ rf.fit = function(index_trait, feature = "all"){
 ```{r}
 rf.fit(131, feature = "all")
 ```
-
-
 ```{r}
-predict=c(1,2,3)
-df_test=c(2,2,4)
-sum(predict==df_test)
+rf.fit(131, feature = "sc")
+```
+```{r}
+rf.fit(131, feature = "fc")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+summary(df[,121+131])
+unique(df[,121+131])
+```
+
+```{r}
+dt.fit = function(index_trait, feature = "all"){
+  if(feature == "fc"){ 
+    df.rf = cbind(df[,c(2:61)], df[,121+index_trait])
+  }else if(feature == "sc"){
+    df.rf = cbind(df[,c(62:121)], df[,121+index_trait])
+  }else{
+    df.rf = cbind(df[,c(2:121)], df[,121+index_trait])
+  }
+
+  colnames(df.rf)[dim(df.rf)[2]] = "Depressive_Ep"
+  df.rf = na.omit(df.rf)
+  
+
+  index = sample(c(1:dim(df.rf)[1]), round(dim(df.rf)[1]/3))
+
+  df_train = df.rf[-index,]
+  df_test = df.rf[index,]
+
+  
+  if(feature == "fc"){
+   #rt_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
+    decision_tree=rpart(
+  Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, 
+  data = df_train,method="classification")
+    summary( decision_tree)
+    dt.pred = predict(decision_tree, df_test[,c(1:3)])
+  }else if(feature == "sc"){
+     decision_tree = rpart(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="classification")
+    summary(rf_classifier)
+   dt.pred = predict(decision_tree, df_test[,c(1:3)])
+  }else{
+     decision_tree = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="classification")
+    summary(decision_tree)
+    dt.pred = predict(decision_tree, df_test[,c(1:3, 61:63)])
+  }
+
+  
+   
+    accuracy = sum((dt.pred==df_test$Depressive_Ep))/length(dt.pred)
+    
+    return(list(mod = decision_tree,accuracy=accuracy))
+  
+    
+   
+}
+```
+
+```{r}
+dt.fit(130, feature = "all")
+```
+
+
+
