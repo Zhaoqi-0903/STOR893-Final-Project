@@ -40,6 +40,5 @@ plotComparison(trainset, train_oversampling, attrs = names(train_oversampling)[2
 plotComparison(trainset, train_oversampling, attrs = names(train_oversampling)[62:63], classAttr = "Trait_130")
 
 #save the oversampled trainset and untouched testset 
-save(train_oversampling,file="train_oversampling.RData")
-save(testset,file="test.RData")
-
+save(train_oversampling,testset,file="oversampling_train_and_unchanged_test.RData")
+load("oversampling_train_and_unchanged_test.RData")
