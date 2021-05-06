@@ -2,7 +2,9 @@
 title: "Random Forest"
 author: "ximing"
 date: "5/5/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 ```{r}
 library(glmnet)
@@ -47,7 +49,7 @@ rf.fit = function(index_trait, feature = "all"){
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3)])
   }else{
-     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, importance=TRUE)
+     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100,  mtry=2,importance=TRUE)
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3, 61:63)])
   }
@@ -101,22 +103,24 @@ dt.fit = function(index_trait, feature = "all"){
    #rt_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
     decision_tree=rpart(
   Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, 
-  data = df_train,method="classification")
+  data = df_train,method="class")
     summary( decision_tree)
     dt.pred = predict(decision_tree, df_test[,c(1:3)])
   }else if(feature == "sc"){
-     decision_tree = rpart(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="classification")
+     decision_tree = rpart(as.factor(Depressive_Ep)~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="class")
     summary(rf_classifier)
    dt.pred = predict(decision_tree, df_test[,c(1:3)])
   }else{
-     decision_tree = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="classification")
+     decision_tree = randomForest(as.factor(Depressive_Ep)~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="class")
     summary(decision_tree)
     dt.pred = predict(decision_tree, df_test[,c(1:3, 61:63)])
   }
+   
 
   
    
     accuracy = sum((dt.pred==df_test$Depressive_Ep))/length(dt.pred)
+    recall=
     
     return(list(mod = decision_tree,accuracy=accuracy))
   

@@ -433,7 +433,7 @@ summary {
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3)])
   }else{
-     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, importance=TRUE)
+     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100,  mtry=2,importance=TRUE)
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3, 61:63)])
   }
@@ -451,16 +451,16 @@ summary {
 <pre><code>## $mod
 ## 
 ## Call:
-##  randomForest(formula = Depressive_Ep ~ FCfeature_1 + FCfeature_2 +      FCfeature_3 + SCfeature_1 + SCfeature_2 + SCfeature_3, data = df_train,      ntree = 100, importance = TRUE) 
+##  randomForest(formula = Depressive_Ep ~ FCfeature_1 + FCfeature_2 +      FCfeature_3 + SCfeature_1 + SCfeature_2 + SCfeature_3, data = df_train,      ntree = 100, mtry = 2, importance = TRUE) 
 ##                Type of random forest: regression
 ##                      Number of trees: 100
 ## No. of variables tried at each split: 2
 ## 
-##           Mean of squared residuals: 7.354764
-##                     % Var explained: -8.88
+##           Mean of squared residuals: 7.008358
+##                     % Var explained: -4.99
 ## 
 ## $mse
-## [1] 6.354884</code></pre>
+## [1] 6.239941</code></pre>
 <pre class="r"><code>rf.fit(131, feature = &quot;sc&quot;)</code></pre>
 <pre><code>## $mod
 ## 
@@ -470,11 +470,11 @@ summary {
 ##                      Number of trees: 100
 ## No. of variables tried at each split: 2
 ## 
-##           Mean of squared residuals: 8.003568
-##                     % Var explained: -14.12
+##           Mean of squared residuals: 7.036377
+##                     % Var explained: -13.94
 ## 
 ## $mse
-## [1] 6.030129</code></pre>
+## [1] 7.609784</code></pre>
 <pre class="r"><code>rf.fit(131, feature = &quot;fc&quot;)</code></pre>
 <pre><code>## $mod
 ## 
@@ -484,11 +484,11 @@ summary {
 ##                      Number of trees: 100
 ## No. of variables tried at each split: 2
 ## 
-##           Mean of squared residuals: 7.297788
-##                     % Var explained: -12.28
+##           Mean of squared residuals: 7.612924
+##                     % Var explained: -11.64
 ## 
 ## $mse
-## [1] 7.417798</code></pre>
+## [1] 6.281424</code></pre>
 <pre class="r"><code>summary(df[,121+131])</code></pre>
 <pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA&#39;s 
 ##   0.000   0.000   0.000   1.317   0.000   9.000      33</code></pre>
@@ -517,22 +517,24 @@ summary {
    #rt_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
     decision_tree=rpart(
   Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, 
-  data = df_train,method=&quot;classification&quot;)
+  data = df_train,method=&quot;class&quot;)
     summary( decision_tree)
     dt.pred = predict(decision_tree, df_test[,c(1:3)])
   }else if(feature == &quot;sc&quot;){
-     decision_tree = rpart(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method=&quot;classification&quot;)
+     decision_tree = rpart(as.factor(Depressive_Ep)~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method=&quot;class&quot;)
     summary(rf_classifier)
    dt.pred = predict(decision_tree, df_test[,c(1:3)])
   }else{
-     decision_tree = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method=&quot;classification&quot;)
+     decision_tree = randomForest(as.factor(Depressive_Ep)~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method=&quot;class&quot;)
     summary(decision_tree)
     dt.pred = predict(decision_tree, df_test[,c(1:3, 61:63)])
   }
+   
 
   
    
     accuracy = sum((dt.pred==df_test$Depressive_Ep))/length(dt.pred)
+    recall=
     
     return(list(mod = decision_tree,accuracy=accuracy))
   
@@ -540,21 +542,22 @@ summary {
    
 }</code></pre>
 <pre class="r"><code>dt.fit(130, feature = &quot;all&quot;)</code></pre>
-<pre><code>## Warning in randomForest.default(m, y, ...): The response has five or fewer
-## unique values. Are you sure you want to do regression?</code></pre>
 <pre><code>## $mod
 ## 
 ## Call:
-##  randomForest(formula = Depressive_Ep ~ FCfeature_1 + FCfeature_2 +      FCfeature_3 + SCfeature_1 + SCfeature_2 + SCfeature_3, data = df_train,      method = &quot;classification&quot;) 
-##                Type of random forest: regression
+##  randomForest(formula = as.factor(Depressive_Ep) ~ FCfeature_1 +      FCfeature_2 + FCfeature_3 + SCfeature_1 + SCfeature_2 + SCfeature_3,      data = df_train, method = &quot;class&quot;) 
+##                Type of random forest: classification
 ##                      Number of trees: 500
 ## No. of variables tried at each split: 2
 ## 
-##           Mean of squared residuals: 1.443659
-##                     % Var explained: -6.53
+##         OOB estimate of  error rate: 9.2%
+## Confusion matrix:
+##     1 5 class.error
+## 1 622 2 0.003205128
+## 5  61 0 1.000000000
 ## 
 ## $accuracy
-## [1] 0</code></pre>
+## [1] 0.9008746</code></pre>
 </div>
 
 
