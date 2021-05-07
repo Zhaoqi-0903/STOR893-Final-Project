@@ -15,7 +15,7 @@ library(rpart)
 
 # Load Data
 ```{r setup, include=FALSE}
-load("../Data/merge_df.RData")
+load("../Data/oversampling_train_and_unchanged_test.RData")
 ```
 
 # Define Random Forest Model
@@ -37,28 +37,44 @@ rf.fit = function(index_trait, feature = "all"){
 
   df_train = df.rf[-index,]
   df_test = df.rf[index,]
+  
+
 
   
+ 
+  
+ 
   
   if(feature == "fc"){
-   rf_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
+   rf_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3+FCfeature_4,data=df_train, ntree=100, mtry=2, importance=TRUE)
     summary(rf_classifier)
-    rf.pred = predict(rf_classifier, df_test[,c(1:3)])
+    rf.pred = predict(rf_classifier, df_test[,c(1:4)])
   }else if(feature == "sc"){
      rf_classifier = randomForest(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, mtry=2, importance=TRUE)
     summary(rf_classifier)
     rf.pred = predict(rf_classifier, df_test[,c(1:3)])
   }else{
-     rf_classifier = randomForest(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100,  mtry=2,importance=TRUE)
+     df_train=cbind(df_train[,c(2:31)],df_train[,c(62:91)],df_train[,length(df_train)])
+      colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
+     rf_classifier = randomForest(Depressive_Ep~., data = df_train, ntree=500,  mtry=2,importance=TRUE)
+     
     summary(rf_classifier)
-    rf.pred = predict(rf_classifier, df_test[,c(1:3, 61:63)])
+    test_data=cbind(df_test[,c(2:31)],df_test[,c(62:91)])
+    
+    
+    print(dim(test_data)) #343  60
+    rf.pred = predict(rf_classifier, data =test_data )
+    print(length(rf.pred))#685
   }
 
   
-   
-    mse = mean((rf.pred - df_test$Depressive_Ep)^2)
+    #mse = mean((rf.pred - df_test$Depressive_Ep)^2)
     
-    return(list(mod = rf_classifier, mse = mse))
+   # return(list(mod = rf_classifier, mse = mse))
+
+  
+  
+  
   
     
    
@@ -67,6 +83,7 @@ rf.fit = function(index_trait, feature = "all"){
 ```{r}
 rf.fit(131, feature = "all")
 ```
+
 ```{r}
 rf.fit(131, feature = "sc")
 ```
@@ -75,32 +92,35 @@ rf.fit(131, feature = "fc")
 ```
 
 ```{r}
-summary(df[,121+131])
-unique(df[,121+131])
+
+train_oversampling[,length(train_oversampling)]
 ```
 
 ```{r}
-dt.fit = function(index_trait, feature = "all"){
+dt.fit = function(index_trait=130, feature = "all"){
   if(feature == "fc"){ 
-    df.rf = cbind(df[,c(2:61)], df[,121+index_trait])
+    df_train = cbind(train_oversampling[,c(2:61)], train_oversampling[,length(train_oversampling)])
+    
+    df_test = cbind(testset[,c(2:61)], testset[,length(testset)])
   }else if(feature == "sc"){
-    df.rf = cbind(df[,c(62:121)], df[,121+index_trait])
+    df_train = cbind(train_oversampling[,c(62:121)], train_oversampling[,length(train_oversampling)])
+    
+      df_test = cbind(testset[,c(62:121)], testset[,length(testset)])
   }else{
-    df.rf = cbind(df[,c(2:121)], df[,121+index_trait])
+   df_train = cbind(train_oversampling[,c(2:121)], train_oversampling[,length(train_oversampling)])
+   
+     df_test = cbind(testset[,c(2:121)], testset[,length(testset)])
   }
 
-  colnames(df.rf)[dim(df.rf)[2]] = "Depressive_Ep"
-  df.rf = na.omit(df.rf)
+  colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
+   colnames(df_test)[dim(df_test)[2]] = "Depressive_Ep"
+  df_test = na.omit(df_test)
   
 
-  index = sample(c(1:dim(df.rf)[1]), round(dim(df.rf)[1]/3))
-
-  df_train = df.rf[-index,]
-  df_test = df.rf[index,]
-
+  
   
   if(feature == "fc"){
-   #rt_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, data=df_train, ntree=100, mtry=2, importance=TRUE)
+  
     decision_tree=rpart(
   Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, 
   data = df_train,method="class")
