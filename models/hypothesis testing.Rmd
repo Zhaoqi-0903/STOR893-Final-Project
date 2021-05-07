@@ -1,0 +1,119 @@
+---
+title: "Hypothesis testing of connectome distirbution difference"
+author: "Zhaoqi Liu"
+date: "5/6/2021"
+output: html_document
+---
+
+```{r,message=FALSE}
+library(R.matlab)
+library(plot3D)
+library(rgl) #produce interactive 3-D plots.
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{r}
+#load data
+load("~/Downloads/STOR893/FinalProject/STOR-893-Final-Project/Data/merge_df.RData")
+```
+
+
+We want to assess whether there are significant difference in distribution of brain PC scores among subjects having major depression symptom versus subjects not having major depression. Since there are only 95 subjects have diagnosed major depression, we choose all subjects with major depression symptom and randomly choose 95 healthy subjects as two groups. 
+We used Maximum Mean Discrepancy (MMD) test to obtain p values for
+differences in the brain connectomes across the two groups for trait 130.
+
+```{r,message=FALSE}
+if(!require(kernlab)) { install.packages("kernlab", repos = "http://cran.us.r-project.org"); library("kernlab") }
+```
+
+```{r}
+df_dep<-df[,c(1,2:121,251:252)]
+df_dep<-na.omit(df_dep) #1028 obs
+df_dep_sorted<-df_dep[order(df_dep$Trait_130),]
+df_dep_sorted$depression<-as.factor(ifelse(df_dep_sorted$Trait_130==1,0,1))
+```
+
+```{r}
+set.seed(893)
+df_dep_yes<-tail(df_dep_sorted,nrow(df_dep_sorted[df_dep_sorted$depression==1,])) # group with major depression 
+random.sample<-sample(1:nrow(df_dep_sorted[df_dep_sorted$depression==0,]),size=nrow(df_dep_sorted[df_dep_sorted$depression==1,]))
+df_dep_no<-df_dep_sorted[random.sample,] # healthy group 
+```
+
+
+## two sample t test for PCA1 
+```{r}
+t.test(df_dep_yes$FCfeature_1,df_dep_no$FCfeature_1,var.equal = FALSE)
+
+#SC
+t.test(df_dep_yes$SCfeature_1,df_dep_no$SCfeature_1,var.equal = FALSE)
+```
+
+## MMD
+### For FC 
+
+```{r}
+fc.yes<-as.matrix(df_dep_yes[,2:61])
+fc.no<-as.matrix(df_dep_no[,2:61])
+kmmd(fc.yes,fc.no,kernel="rbfdot",alpha=0.05,asymptotic=TRUE)
+```
+
+
+
+### For SC
+```{r}
+sc.yes<-as.matrix(df_dep_yes[,62:121])
+sc.no<-as.matrix(df_dep_no[,62:121])
+kmmd(sc.yes,sc.no,kernel="rbfdot")
+```
+
+The test results show that for both SC and FC, we don't have evidence to say that the distribution of brain PC score are different between healthy group and the group with diagnosed major depression. We cannot use Hotelling test because the PCA scores are not Gaussian multivariate-distributed. 
+
+
+### Data Visualization 
+
+```{r, webgl=TRUE}
+df_dep_subset<-rbind(df_dep_yes,df_dep_no)
+
+FC.PC1<-df_dep_subset$FCfeature_1
+FC.PC2<-df_dep_subset$FCfeature_2
+FC.PC3<-df_dep_subset$FCfeature_3
+
+summary(df_dep_subset[,2:4])
+#interactive 3d plot 
+#green means healthy, red means with major depression 
+plot3d(FC.PC1,FC.PC2,FC.PC3,type="p",size=3,col=ifelse(df_dep_subset$depression==0,"#1B9E77","#D95F02"))
+```
+
+```{r}
+scatter3D(FC.PC1,FC.PC2,FC.PC3,colvar=as.numeric(df_dep_subset$depression),
+          bty="b2",col=c("#1B9E77","#D95F02"),colkey=FALSE,
+          pch=19,cex=0.5,theta=-60,phi=20,
+          main= "FC", xlab= "PC1", ylab="PC2",zlab="PC3")
+text3D(c(0.05,0.06),c(-0.08,-0.075),c(0.02,0.04),labels=c("Healthy","Major Depression"),add=TRUE,cex=0.8)
+points3D(c(0.05,0.06),c(-0.075,-0.07),c(0.02,0.04),col=c("#1B9E77","#D95F02"),colkey=FALSE,add=TRUE,pch=19,cex=0.5)
+```
+
+
+```{r,webgl=hook_webgl}
+SC.PC1<-df_dep_subset$SCfeature_1
+SC.PC2<-df_dep_subset$SCfeature_2
+SC.PC3<-df_dep_subset$SCfeature_3
+summary(df_dep_subset[,62:64])
+
+##green means healthy, red means with major depression 
+plot3d(SC.PC1,SC.PC2,SC.PC3,type="p",size=3,col=ifelse(df_dep_subset$depression==0,"#1B9E77","#D95F02"))
+
+```
+
+
+```{r}
+scatter3D(SC.PC1,SC.PC2,SC.PC3,colvar=as.numeric(df_dep_subset$depression),
+          bty="b2",col=c("#1B9E77","#D95F02"),colkey=FALSE,
+          pch=19,cex=0.5,theta=-60,phi=20,
+          main= "SC", xlab= "PC1", ylab="PC2",zlab="PC3")
+text3D(c(0.07,0.08),c(-0.11,-0.105),c(0.005,0.025),labels=c("Healthy","Major Depression"),add=TRUE,cex=0.8)
+points3D(c(0.07,0.08),c(-0.105,-0.1),c(0.005,0.025),col=c("#1B9E77","#D95F02"),colkey=FALSE,add=TRUE,pch=19,cex=0.5)
+```
+
+
