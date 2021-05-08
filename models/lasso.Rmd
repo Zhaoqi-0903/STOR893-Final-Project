@@ -13,7 +13,7 @@ output: html_document
 # setwd("/Users/zhangwan/OneDrive - University of North Carolina at Chapel Hill/893/STOR893-Final-Project-")
 load("../Data/merge_df.RData")
 
-load("../Data/oversampling_df.RData")
+load("../Data/oversampling_train_and_unchanged_test.RData")
 
 
 # df_dep<-df[,c(1:121,251)]
@@ -44,30 +44,50 @@ library(glmnet)
 library(ROCR)
 library(caret)
 
-glmnet_mod = function(df,index_trait = 1, alpha, mod.family, feature = "all"){
+data_131 = function(feature, var = 60){
   if(feature == "fc"){
-    df_na_omit = cbind(df[,c(2:61)], df[,121+index_trait])
+    df_naomit = cbind(df[,c(2:(1+var))], df[,121+131])
   }else if(feature == "sc"){
-    df_na_omit = cbind(df[,c(62:121)], df[,121+index_trait])
+    df_naomit = cbind(df[,c(62:(61+var))], df[,121+131])
   }else{
-    df_na_omit = cbind(df[,c(2:121)], df[,121+index_trait])
+    df_naomit = cbind(df[,c(2:(1+var), 62:(61+var))], df[,121+131])
+  }
+  colnames(df_naomit)[dim(df_naomit)[2]] = "Depressive_Ep"
+  df_naomit = na.omit(df_naomit)
+  
+  index = sample(c(1:dim(df_naomit)[1]), round(dim(df_naomit)[1]/3))
+  df_train = df_naomit[-index,]
+  df_test = df_naomit[index,]
+   
+  return(list(train = df_train, test = df_test))
+}
+
+glmnet_mod = function(df_train = NULL, df_test = NULL, alpha, mod.family, feature = "all", threshold = NULL){
+  if(mod.family == "binomial"){
+    if(feature == "fc"){
+      df_train = cbind(df_train[,c(2:61)], df_train[,122])
+      df_test = cbind(df_test[,c(2:61)], df_test[,122])
+    }else if(feature == "sc"){
+      df_train = cbind(df_train[,c(62:121)], df_train[,122])
+      df_test = cbind(df_test[,c(62:121)], df_test[,122])
+    }else{
+      df_train = cbind(df_train[,c(2:121)], df_train[,122])
+      df_test = cbind(df_test[,c(2:121)], df_test[,122])
+    }
+  }else{
+    df131 = data_131(feature = feature)
+    df_train = df131$train
+    df_test = df131$test
   }
   
-  #  if(feature == "fc"){
-  #   df_na_omit = cbind(df[,c(2:61)], df[,122])
-  # }else if(feature == "sc"){
-  #   df_na_omit = cbind(df[,c(62:121)], df[,122])
-  # }else{
-  #   df_na_omit = cbind(df[,c(2:121)], df[,122])
-  # }
 
-  colnames(df_na_omit)[dim(df_na_omit)[2]] = "Depressive_Ep"
-  df_na_omit = na.omit(df_na_omit)
+  colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
+  colnames(df_test)[dim(df_test)[2]] = "Depressive_Ep"
 
-  index = sample(c(1:dim(df_na_omit)[1]), round(dim(df_na_omit)[1]/3))
-
-  df_train = df_na_omit[-index,]
-  df_test = df_na_omit[index,]
+  # index = sample(c(1:dim(df_na_omit)[1]), round(dim(df_na_omit)[1]/3))
+  # 
+  # df_train = df_na_omit[-index,]
+  # df_test = df_na_omit[index,]
 
   # if(mod.family == "binomial"){
   #   y_trn = matrix(ifelse(df_train[,ncol(df_train)] == 1, 0, 1))
@@ -77,36 +97,45 @@ glmnet_mod = function(df,index_trait = 1, alpha, mod.family, feature = "all"){
   #   y_tst = matrix(df_test[,ncol(df_test)])
   # }
   
-  y_trn = matrix(as.numeric(df_train[,ncol(df_train)])) - 1
-  y_tst = matrix(as.numeric(df_test[,ncol(df_test)])) - 1
-  x_trn = model.matrix(Depressive_Ep~., df_train)[,-1]
-  x_tst = model.matrix(Depressive_Ep~., df_test)[,-1]
-  cvfit=cv.glmnet(x_trn,y_trn)
+  y_trn = matrix(as.numeric(as.character(df_train[,ncol(df_train)]))) 
+  y_tst = matrix(as.numeric(as.character(df_test[,ncol(df_test)])))
+  x_trn = as.matrix(df_train[,1:(dim(df_train)[2]-1)])
+  x_tst = as.matrix(df_test[,1:(dim(df_test)[2]-1)])
+  cvfit=cv.glmnet(x_trn,y_trn,family = mod.family)
   mod = glmnet(x_trn, y_trn, family = mod.family, alpha = alpha, lambda = cvfit$lambda.min)
   mod.pred = predict(mod, x_tst, type = "response")
 
   if(mod.family == "binomial"){
     predictions <- prediction(mod.pred,y_tst)
     plot(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values),
-         type="l", lwd=2, ylab="Sensitivity", xlab="Cutoff")
+         type="l", lwd=2, cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="Cutoff")
     par(new=TRUE)
     plot(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values),
-         type="l", lwd=2, col='red', ylab="", xlab="")
+         type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), col='red', ylab="", xlab="")
     # axis(4, at=seq(0,1,0.2),labels=z)
     mtext("Specificity",side=4, padj=-2, col='red')
-  
-    sens = cbind(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values))
-    spec = cbind(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values))
-    threshold = sens[which.min(apply(sens, 1, function(x) min(colSums(abs(t(spec) - x))))), 1]
-  
+    
+    auc.tmp <- performance(predictions,"auc"); 
+    auc <- as.numeric(auc.tmp@y.values)
+    
+    plot(1-unlist(performance(predictions, "spec")@y.values), unlist(performance(predictions, "sens")@y.values),
+         type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="1-Specificity", sub = paste("AUC = ", as.character(auc)), main = paste("alpha = ", as.character(alpha)))
+    
+    if(is.null(threshold)){
+      sens = cbind(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values))
+      spec = cbind(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values))
+      threshold = sens[which.min(apply(sens, 1, function(x) min(colSums(abs(t(spec) - x))))), 1]
+    }
+    
     conf.mat = confusionMatrix(data = factor(ifelse(mod.pred > threshold, 1, 0)), reference = factor(y_tst))
   }else{
     threshold = NULL
     conf.mat = NULL
+    auc = NULL
   }
   
 
-  return(list(mod = mod, predict = mod.pred, err = mean((y_tst-mod.pred)^2), threshold = threshold, confusion.matrix = conf.mat$table, ratio = conf.mat$byClass))
+  return(list(mod = mod, err = mean((y_tst-mod.pred)^2), confusion.matrix = conf.mat, auc = auc))
 }
 ```
 
@@ -114,90 +143,89 @@ glmnet_mod = function(df,index_trait = 1, alpha, mod.family, feature = "all"){
 
 ```{r}
 set.seed(15)
-mod.lasso.130.sc = glmnet_mod(df_dep_oversampling, alpha=1, mod.family = "binomial", feature = "sc")
+mod.lasso.130.sc = glmnet_mod(train_oversampling, testset, alpha=1, mod.family = "binomial", feature = "sc")
 # lasso model with only sc
 mod.lasso.130.sc$mod
 # confusion matrix
 mod.lasso.130.sc$confusion.matrix
 # Sensitivity          Specificity 
 mod.lasso.130.sc$ratio
-# mse
-mod.lasso.130.sc$err
+mod.lasso.130.sc$auc
 
-mod.lasso.130.fc = glmnet_mod(df_dep_oversampling, alpha=1, mod.family = "binomial", feature = "fc")
+
+mod.lasso.130.fc = glmnet_mod(train_oversampling, testset, alpha=1, mod.family = "binomial", feature = "fc")
 # lasso model with only fc
 mod.lasso.130.fc$mod
 # confusion matrix
 mod.lasso.130.fc$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.lasso.130.fc$ratio
-# mse
-mod.lasso.130.fc$err
+mod.lasso.130.fc$auc
+
 
 # doesn't work
-mod.lasso.130.all = glmnet_mod(df_dep_oversampling, alpha=1, mod.family = "binomial", feature = "all")
+mod.lasso.130.all = glmnet_mod(train_oversampling, testset, alpha=1, mod.family = "binomial", feature = "all")
 # lasso model will all features
 mod.lasso.130.all$mod
 # confusion matrix
 mod.lasso.130.all$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.lasso.130.all$ratio
-# mse
-mod.lasso.130.all$err
+mod.lasso.130.all$auc
 ```
 
 LASSO for trait 130 sometimes shrinks to 0. So we pick a smaller alpha to keep more predictors.
 
 ```{r}
 set.seed(15)
-mod.lasso.130.sc = glmnet_mod(df_dep_oversampling, alpha=0.8, mod.family = "binomial", feature = "sc")
+mod.lasso.130.sc = glmnet_mod(train_oversampling, testset, alpha=0.8, mod.family = "binomial", feature = "sc")
 # lasso model with only sc
 mod.lasso.130.sc$mod
 # confusion matrix
 mod.lasso.130.sc$confusion.matrix
 # Sensitivity          Specificity 
 mod.lasso.130.sc$ratio
-# mse
-mod.lasso.130.sc$err
+# auc
+mod.lasso.130.sc$auc
 
-mod.lasso.130.fc = glmnet_mod(df_dep_oversampling, alpha=0.8, mod.family = "binomial", feature = "fc")
+mod.lasso.130.fc = glmnet_mod(train_oversampling, testset, alpha=0.8, mod.family = "binomial", feature = "fc")
 # lasso model with only fc
 mod.lasso.130.fc$mod
 # confusion matrix
 mod.lasso.130.fc$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.lasso.130.fc$ratio
-# mse
-mod.lasso.130.fc$err
+# auc
+mod.lasso.130.fc$auc
 
-mod.lasso.130.all = glmnet_mod(df_dep_oversampling, alpha=0.8, mod.family = "binomial", feature = "all")
+mod.lasso.130.all = glmnet_mod(train_oversampling, testset, alpha=0.8, mod.family = "binomial", feature = "all")
 # lasso model will all features
 mod.lasso.130.all$mod
 # confusion matrix
 mod.lasso.130.all$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.lasso.130.all$ratio
-# mse
-mod.lasso.130.all$err
+# auc
+mod.lasso.130.all$auc
 ```
 
 ## LASSO for 131
 
 ```{r}
-mod.lasso.131.sc = glmnet_mod(df, index_trait = 131, alpha = 1, mod.family = "gaussian", feature = "sc")
+mod.lasso.131.sc = glmnet_mod(alpha = 1, mod.family = "gaussian", feature = "sc")
 # lasso model with only sc
 mod.lasso.131.sc$mod
 # mse
-mod.lasso.130.sc$err
+mod.lasso.131.sc$err
 
-mod.lasso.131.fc = glmnet_mod(df, index_trait = 131, alpha = 1, mod.family = "gaussian", feature = "fc")
+mod.lasso.131.fc = glmnet_mod(alpha = 1, mod.family = "gaussian", feature = "fc")
 # lasso model with only fc
 mod.lasso.131.fc$mod
 # mse
 mod.lasso.131.fc$err
 
 
-mod.lasso.131.all = glmnet_mod(df, index_trait = 131, alpha = 1, mod.family = "gaussian", feature = "all")
+mod.lasso.131.all = glmnet_mod(alpha = 1, mod.family = "gaussian", feature = "all")
 # lasso model will all features
 mod.lasso.131.all$mod
 # mse
@@ -207,7 +235,7 @@ mod.lasso.131.all$err
 ## Ridge for 130
 
 ```{r}
-mod.ridge.130.sc = glmnet_mod(df_dep_oversampling, alpha = 0, mod.family = "binomial", feature = "sc")
+mod.ridge.130.sc = glmnet_mod(train_oversampling, testset, alpha = 0, mod.family = "binomial", feature = "sc")
 # ridge model with only sc
 mod.ridge.130.sc$mod
 # confusion matrix
@@ -215,50 +243,50 @@ mod.ridge.130.sc$confusion.matrix
 # Sensitivity          Specificity 
 mod.ridge.130.sc$ratio
 # mse
-mod.ridge.130.sc$err
+mod.ridge.130.sc$auc
 
 
-mod.ridge.130.fc = glmnet_mod(df_dep_oversampling, alpha = 0, mod.family = "binomial", feature = "fc")
+mod.ridge.130.fc = glmnet_mod(train_oversampling, testset,  alpha = 0, mod.family = "binomial", feature = "fc")
 # ridge model with only fc
 mod.ridge.130.fc$mod
 # confusion matrix
 mod.ridge.130.fc$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.ridge.130.fc$ratio
 # mse
-mod.ridge.130.fc$err
+mod.ridge.130.fc$auc
 
 
-mod.ridge.130.all = glmnet_mod(df_dep_oversampling, alpha = 0, mod.family = "binomial", feature = "all")
+mod.ridge.130.all = glmnet_mod(train_oversampling, testset, alpha = 0, mod.family = "binomial", feature = "all")
 # ridge model with all features
 mod.ridge.130.all$mod
 # confusion matrix
 mod.ridge.130.all$confusion.matrix
-# Sensitivity          Specificity 
+# Sensitivity          Specificity
 mod.ridge.130.all$ratio
 # mse
-mod.ridge.130.all$err
+mod.ridge.130.all$auc
 
 ```
 
 ## Ridge for 131
 
 ```{r}
-mod.ridge.131.sc = glmnet_mod(df, index_trait = 131, alpha = 0, mod.family = "gaussian", feature = "sc")
+mod.ridge.131.sc = glmnet_mod(alpha = 0, mod.family = "gaussian", feature = "sc")
 # ridge model with only sc
 mod.ridge.131.sc$mod
 # mse
 mod.ridge.131.sc$err
 
 
-mod.ridge.131.fc = glmnet_mod(df, index_trait = 131, alpha = 0, mod.family = "gaussian", feature = "fc")
+mod.ridge.131.fc = glmnet_mod(alpha = 0, mod.family = "gaussian", feature = "fc")
 # ridge model with only fc
 mod.ridge.131.fc$mod
 # mse
 mod.ridge.131.fc$err
 
 
-mod.ridge.131.all = glmnet_mod(df, index_trait = 131, alpha = 0, mod.family = "gaussian", feature = "all")
+mod.ridge.131.all = glmnet_mod(alpha = 0, mod.family = "gaussian", feature = "all")
 # ridge model with all features
 mod.ridge.131.all$mod
 # mse
@@ -270,52 +298,90 @@ mod.ridge.131.all$err
 
 ```{r}
 library(e1071)
-svm.fit = function(df, index_trait = 1, type = "C-classification", feature = "all"){
-   if(feature == "fc"){
-    df.svm = cbind(df[,c(2:61)], df[,121+index_trait])
-  }else if(feature == "sc"){
-    df.svm = cbind(df[,c(62:121)], df[,121+index_trait])
+svm.fit = function(df_train = NULL, df_test = NULL, type = "C-classification", feature = "all", var = 10){
+  if(type == "C-classification"){
+    if(feature == "fc"){
+      df_train = cbind(df_train[,c(2:(1+var))], df_train[,122])
+      df_test = cbind(df_test[,c(2:(1+var))], df_test[,122])
+    }else if(feature == "sc"){
+      df_train = cbind(df_train[,c(62:(61+var))], df_train[,122])
+      df_test = cbind(df_test[,c(62:(61+var))], df_test[,122])
+    }else{
+      df_train = cbind(df_train[,c(2:(1+var), 62:(61+var))], df_train[,122])
+      df_test = cbind(df_test[,c(2:(1+var), 62:(61+var))], df_test[,122])
+    }
   }else{
-    df.svm = cbind(df[,c(2:121)], df[,121+index_trait])
+    df131 = data_131(feature = feature, var = var)
+    df_train = df131$train
+    df_test = df131$test
   }
+  
 
-  colnames(df.svm)[dim(df.svm)[2]] = "Depressive_Ep"
-  df.svm = na.omit(df.svm)
+  colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
+  colnames(df_test)[dim(df_test)[2]] = "Depressive_Ep"
+  
+  #  if(feature == "fc"){
+  #   df.svm = cbind(df[,c(2:61)], df[,121+index_trait])
+  # }else if(feature == "sc"){
+  #   df.svm = cbind(df[,c(62:121)], df[,121+index_trait])
+  # }else{
+  #   df.svm = cbind(df[,c(2:121)], df[,121+index_trait])
+  # }
+  # 
+  # colnames(df.svm)[dim(df.svm)[2]] = "Depressive_Ep"
+  # df.svm = na.omit(df.svm)
   # if(type == "C-classification"){
   #   df.svm$Depressive_Ep = ifelse(df.svm$Depressive_Ep == 1, 0, 1)
   # }
 
-  index = sample(c(1:dim(df.svm)[1]), round(dim(df.svm)[1]/3))
-
-  df_train = df.svm[-index,]
-  df_test = df.svm[index,]
+  # index = sample(c(1:dim(df.svm)[1]), round(dim(df.svm)[1]/3))
+  # 
+  # df_train = df.svm[-index,]
+  # df_test = df.svm[index,]
 
   # mod.svm = svm(Depressive_Ep~., data = df_train, type = "C-classification", kernel = "radial", cost = 50000, C = 150)
-  if(feature == "fc"){
-    mod.svm = svm(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3, data = df_train, kernel="radial", type = type, cost = 1000)
-    summary(mod.svm)
-    svm.pred = predict(mod.svm, df_test[,c(1:3)])
-  }else if(feature == "sc"){
-    mod.svm = svm(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, kernel="radial", type = type, cost = 1000)
-    summary(mod.svm)
-    svm.pred = predict(mod.svm, df_test[,c(1:3)])
-  }else{
-    mod.svm = svm(Depressive_Ep~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, kernel="radial", type = type, cost = 1000)
+  # if(feature == "fc"){
+  #   mod.svm = svm(Depressive_Ep~., data = df_train, kernel="radial", type = type, cost = 40000)
+  #   summary(mod.svm)
+  #   svm.pred = predict(mod.svm, df_test[,c(1:var)])
+  # }else if(feature == "sc"){
+  #   mod.svm = svm(Depressive_Ep~., data = df_train, kernel="radial", type = type, cost = 40000)
+  #   summary(mod.svm)
+  #   svm.pred = predict(mod.svm, df_test[,c(1:var)])
+  # }else{
+    mod.svm = svm(Depressive_Ep~., data = df_train, kernel="radial", type = type, cost = 10000)
     summary(mod.svm)
     # svm.pred = predict(mod.svm, df_test[-dim(df_test)[2]])
-    svm.pred = predict(mod.svm, df_test[,c(1:3, 61:63)])
-  }
+    svm.pred = predict(mod.svm, df_test[,c(1:ncol(df_test)-1)])
+  # }
 
   if(type == "C-classification"){
     (svm.table<-table(svm.pred,df_test$Depressive_Ep))
     conf.mat = confusionMatrix(svm.table)
     mse = NULL
+
+    predictions <- prediction(as.numeric(svm.pred),as.numeric(as.character(df_test$Depressive_Ep)))
+    
+    auc.tmp <- performance(predictions,"auc"); 
+    auc <- as.numeric(auc.tmp@y.values)
+    
+    svmmodel.predict<-predict(mod.svm,df_test[,c(1:ncol(df_test)-1)],decision.values=TRUE)
+    svmmodel.probs<-attr(svmmodel.predict,"decision.values")
+    svmmodel.prediction<-prediction(svmmodel.probs,as.numeric(as.character(df_test$Depressive_Ep)))
+    
+    svmmodel.performance<-performance(svmmodel.prediction,"tpr","fpr")
+    svmmodel.auc<-performance(svmmodel.prediction,"auc")@y.values[[1]]
+    plot(svmmodel.performance, print.auc=TRUE, auc.polygon=TRUE, partial.auc=c(1, 0.8), sub = paste("AUC = ", as.character(svmmodel.auc)))
+    # legend(1, 95, legend=c(paste("AUC = ", as.character(svmmodel.auc))),
+    #    col=c("red"), lty=1:2, cex=0.8)
+    
   }else{
     conf.mat = NULL
     mse = mean((svm.pred - df_test$Depressive_Ep)^2)
+    auc = NULL
   }
 
-  return(list(mod = mod.svm, confusion.matrix = conf.mat$table, ratio = conf.mat$byClass, mse = mse))
+  return(list(mod = mod.svm, confusion.matrix = conf.mat$table, ratio = conf.mat$byClass, mse = mse, auc = auc))
 }
 
 
@@ -324,16 +390,16 @@ svm.fit = function(df, index_trait = 1, type = "C-classification", feature = "al
 ## SVM for 130
 
 ```{r}
-svm.fit(df_dep_oversampling)
-svm.fit(df_dep_oversampling, feature = "sc")
-svm.fit(df_dep_oversampling, feature = "fc")
+svm.fit(train_oversampling, testset)
+svm.fit(train_oversampling, testset, feature = "sc")
+svm.fit(train_oversampling, testset, feature = "fc")
 ```
 
 ## SVM for 131
 
 ```{r}
-svm.fit(df, index_trait = 131, type = "eps-regression")
-svm.fit(df, index_trait = 131, type = "eps-regression", feature = "sc")
-svm.fit(df, index_trait = 131, type = "eps-regression", feature = "fc")
+svm.131.all = svm.fit(type = "eps-regression")
+svm.fit(type = "eps-regression", feature = "sc")
+svm.fit(type = "eps-regression", feature = "fc")
 ```
 
