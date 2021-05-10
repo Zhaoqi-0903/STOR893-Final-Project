@@ -154,4 +154,84 @@ dt.fit(130, feature = "all")
 ```
 
 
+#### decision tree 
+
+```{r}
+load("~/Downloads/STOR893/FinalProject/STOR-893-Final-Project/Data/merge_df.RData")
+```
+
+```{r}
+library(tree)
+```
+
+```{r}
+df_dep<-df[,c(1,2:121,251,252)]
+df_dep<-na.omit(df_dep) #1028 obs
+df_dep_sorted<-df_dep[order(df_dep$Trait_130),]
+df_dep_sorted$Trait_130<-as.factor(ifelse(df_dep_sorted$Trait_130==1,0,1))
+set.seed(893)
+train<-sample(c(TRUE,FALSE),replace=TRUE,size=nrow(df_dep_sorted),prob=2:1)
+trainset<-df_dep_sorted[train,]# 693 observations before oversampling
+test=(!train)
+testset<-df_dep_sorted[test,] #502 observations 
+```
+
+```{r,eval=FALSE}
+#using fc 
+dt.fc<-tree(as.formula(paste(colnames(trainset)[123], "~",
+        paste(colnames(trainset)[2:61], collapse = "+"),
+        sep = "")),data=trainset)
+summary(dt)
+dt.fc.pred<-predict(dt.fc,testset)
+mean((dt.fc.pred-testset$Trait_131)^2)
+
+dt.sc<-tree(as.formula(paste(colnames(trainset)[123], "~",
+        paste(colnames(trainset)[62:121], collapse = "+"),
+        sep = "")),data=trainset)
+summary(dt)
+dt.sc.pred<-predict(dt.sc,testset)
+mean((dt.sc.pred-testset$Trait_131)^2)
+
+
+dt<-tree(Trait_131~.-Trait_130,data=trainset)
+summary(dt)
+dt.pred<-predict(dt,testset)
+mean((dt.pred-testset$Trait_131)^2)
+```
+
+### after removing 0's 
+```{r}
+df_dep<-df[,c(1,2:121,252)]
+df_dep<-na.omit(df_dep) #235 obs
+df_dep<-df_dep[df_dep$Trait_131!=0,]
+set.seed(893)
+train<-sample(c(TRUE,FALSE),replace=TRUE,size=nrow(df_dep),prob=2:1)
+trainset<-df_dep[train,]# 156 observations before oversampling
+test=(!train)
+testset<-df_dep[test,] #79 observations 
+```
+
+```{r}
+#using fc 
+dt.fc<-tree(as.formula(paste(colnames(trainset)[122], "~",
+        paste(colnames(trainset)[2:61], collapse = "+"),
+        sep = "")),data=trainset)
+summary(dt)
+dt.fc.pred<-predict(dt.fc,testset)
+mean((dt.fc.pred-testset$Trait_131)^2)
+
+#using sc
+dt.sc<-tree(as.formula(paste(colnames(trainset)[122], "~",
+        paste(colnames(trainset)[62:121], collapse = "+"),
+        sep = "")),data=trainset)
+summary(dt)
+dt.sc.pred<-predict(dt.sc,testset)
+mean((dt.sc.pred-testset$Trait_131)^2)
+
+#using fc+sc
+dt<-tree(Trait_131~.,data=trainset)
+summary(dt)
+dt.pred<-predict(dt,testset)
+mean((dt.pred-testset$Trait_131)^2)
+```
 
