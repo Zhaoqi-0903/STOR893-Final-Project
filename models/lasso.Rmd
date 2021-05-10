@@ -44,13 +44,16 @@ library(glmnet)
 library(ROCR)
 library(caret)
 
+# remove 131 zeros
+df_0remove = df[df$Trait_131 != 0,]
+
 data_131 = function(feature, var = 60){
   if(feature == "fc"){
-    df_naomit = cbind(df[,c(2:(1+var))], df[,121+131])
+    df_naomit = cbind(df_0remove[,c(2:(1+var))], df_0remove[,121+131])
   }else if(feature == "sc"){
-    df_naomit = cbind(df[,c(62:(61+var))], df[,121+131])
+    df_naomit = cbind(df_0remove[,c(62:(61+var))], df_0remove[,121+131])
   }else{
-    df_naomit = cbind(df[,c(2:(1+var), 62:(61+var))], df[,121+131])
+    df_naomit = cbind(df_0remove[,c(2:(1+var), 62:(61+var))], df_0remove[,121+131])
   }
   colnames(df_naomit)[dim(df_naomit)[2]] = "Depressive_Ep"
   df_naomit = na.omit(df_naomit)
@@ -61,6 +64,24 @@ data_131 = function(feature, var = 60){
    
   return(list(train = df_train, test = df_test))
 }
+
+# data_131 = function(feature, var = 60){
+#   if(feature == "fc"){
+#     df_naomit = cbind(df[,c(2:(1+var))], df[,121+131])
+#   }else if(feature == "sc"){
+#     df_naomit = cbind(df[,c(62:(61+var))], df[,121+131])
+#   }else{
+#     df_naomit = cbind(df[,c(2:(1+var), 62:(61+var))], df[,121+131])
+#   }
+#   colnames(df_naomit)[dim(df_naomit)[2]] = "Depressive_Ep"
+#   df_naomit = na.omit(df_naomit)
+#   
+#   index = sample(c(1:dim(df_naomit)[1]), round(dim(df_naomit)[1]/3))
+#   df_train = df_naomit[-index,]
+#   df_test = df_naomit[index,]
+#    
+#   return(list(train = df_train, test = df_test))
+# }
 
 glmnet_mod = function(df_train = NULL, df_test = NULL, alpha, mod.family, feature = "all", threshold = NULL){
   if(mod.family == "binomial"){
@@ -107,19 +128,19 @@ glmnet_mod = function(df_train = NULL, df_test = NULL, alpha, mod.family, featur
 
   if(mod.family == "binomial"){
     predictions <- prediction(mod.pred,y_tst)
-    plot(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values),
-         type="l", lwd=2, cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="Cutoff")
-    par(new=TRUE)
-    plot(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values),
-         type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), col='red', ylab="", xlab="")
-    # axis(4, at=seq(0,1,0.2),labels=z)
-    mtext("Specificity",side=4, padj=-2, col='red')
+    # plot(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values),
+    #      type="l", lwd=2, cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="Cutoff")
+    # par(new=TRUE)
+    # plot(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values),
+    #      type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), col='red', ylab="", xlab="")
+    # # axis(4, at=seq(0,1,0.2),labels=z)
+    # mtext("Specificity",side=4, padj=-2, col='red')
     
     auc.tmp <- performance(predictions,"auc"); 
     auc <- as.numeric(auc.tmp@y.values)
     
-    plot(1-unlist(performance(predictions, "spec")@y.values), unlist(performance(predictions, "sens")@y.values),
-         type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="1-Specificity", sub = paste("AUC = ", as.character(auc)), main = paste("alpha = ", as.character(alpha)))
+    # plot(1-unlist(performance(predictions, "spec")@y.values), unlist(performance(predictions, "sens")@y.values),
+    #      type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="1-Specificity", sub = paste("AUC = ", as.character(auc)), main = paste("alpha = ", as.character(alpha)))
     
     if(is.null(threshold)){
       sens = cbind(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values))
@@ -129,17 +150,49 @@ glmnet_mod = function(df_train = NULL, df_test = NULL, alpha, mod.family, featur
     
     conf.mat = confusionMatrix(data = factor(ifelse(mod.pred > threshold, 1, 0)), reference = factor(y_tst))
   }else{
+    predictions = NULL
     threshold = NULL
     conf.mat = NULL
     auc = NULL
   }
   
 
-  return(list(mod = mod, err = mean((y_tst-mod.pred)^2), confusion.matrix = conf.mat, auc = auc))
+  return(list(mod = mod, err = mean((y_tst-mod.pred)^2), confusion.matrix = conf.mat, auc = auc, pred = predictions))
 }
 ```
 
 ## LASSO for 130
+
+```{r}
+set.seed(15)
+f = c("sc", "fc", "all")
+png("cutoff_130.png", width=1600, height=400)
+par(mfrow=c(1,3), mar=c(4,4,1,1))
+for (i in 1:3){
+  mod.130 = glmnet_mod(train_oversampling, testset, alpha=1, mod.family = "binomial", feature = f[i], threshold = 0.4)
+  predictions = mod.130$pred
+  plot(unlist(performance(predictions, "sens")@x.values), unlist(performance(predictions, "sens")@y.values),
+       type="l", lwd=2, cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="Cutoff")
+  par(new=TRUE)
+  plot(unlist(performance(predictions, "spec")@x.values), unlist(performance(predictions, "spec")@y.values),
+       type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), col='red', ylab="", xlab="")
+  # axis(4, at=seq(0,1,0.2),labels=z)
+  mtext("Specificity",side=4, padj=-2, col='red')
+}
+dev.off()
+
+set.seed(15)
+a = c(0, 1, 0.8)
+png("roc.png", width=1600, height=400)
+par(mfrow=c(1,3), mar=c(4,4,1,1))
+for (i in 1:3){
+  mod.130 = glmnet_mod(train_oversampling, testset, alpha=a[i], mod.family = "binomial", feature = "sc", threshold = 0.4)
+  auc = mod.130$auc
+  plot(1-unlist(performance(predictions, "spec")@y.values), unlist(performance(predictions, "sens")@y.values),
+       type="l", lwd=2,cex = 0.5,mgp = c(1.8, 0.5, 0), ylab="Sensitivity", xlab="1-Specificity", sub = paste("AUC = ", as.character(auc)), main = paste("alpha = ", as.character(alpha)))
+}
+dev.off()
+```
 
 ```{r}
 set.seed(15)
@@ -398,8 +451,26 @@ svm.fit(train_oversampling, testset, feature = "fc")
 ## SVM for 131
 
 ```{r}
-svm.131.all = svm.fit(type = "eps-regression")
-svm.fit(type = "eps-regression", feature = "sc")
-svm.fit(type = "eps-regression", feature = "fc")
+svm.fit(type = "eps-regression", var =60)
+svm.fit(type = "eps-regression", feature = "sc", var = 60)
+svm.fit(type = "eps-regression", feature = "fc", var = 60)
 ```
 
+## baseline for 131: linear regression
+
+```{r}
+lmod = function(feature){
+  df131 = data_131(feature = feature)
+  df_train = df131$train
+  df_test = df131$test
+  mod.lr = lm(Depressive_Ep~., df_train)
+  lmod.new = step(mod.lr, trace = FALSE)
+  lm.pred = predict(lmod.new, df_test)
+  mse = mean((lm.pred - df_test$Depressive_Ep)^2)
+  mse
+}
+
+for (i in 1:3){
+  print(lmod(f[i]))
+}
+```
