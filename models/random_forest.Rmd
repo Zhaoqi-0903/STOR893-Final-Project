@@ -11,16 +11,191 @@ library(glmnet)
 library(randomForest)
 library(caret)
 library(rpart)
+library(pROC)
 ```
 
 # Load Data
 ```{r setup, include=FALSE}
 load("../Data/oversampling_train_and_unchanged_test.RData")
+load("../Data/merge_df.RData")
 ```
 
-# Define Random Forest Model
+dt 131
 ```{r}
-rf.fit = function(index_trait, feature = "all"){
+dt.fit.131 = function(index_trait=130, feature = "all"){
+    if(feature == "fc"){ 
+    df.rf = cbind(df[,c(2:61)], df[,121+index_trait])
+  }else if(feature == "sc"){
+    df.rf = cbind(df[,c(62:121)], df[,121+index_trait])
+  }else{
+    df.rf = cbind(df[,c(2:121)], df[,121+index_trait])
+  }
+
+  colnames(df.rf)[dim(df.rf)[2]] = "Depressive_Ep"
+  df.rf = na.omit(df.rf)
+  
+
+  index = sample(c(1:dim(df.rf)[1]), round(dim(df.rf)[1]/3))
+
+  df_train = df.rf[-index,]
+  df_test = df.rf[index,]
+
+  decision_tree=rpart(Depressive_Ep ~ ., data = df_train,method="anova")
+  
+  dt.pred = predict(decision_tree, df_test[,1:length(df_test)-1])
+   
+  
+  mse= mean((dt.pred - df_test$Depressive_Ep)^2)
+  
+ 
+   
+
+  
+   
+    
+    return(list(mod = decision_tree,mse=mse))
+  
+    
+   
+}
+```
+
+
+```{r}
+dt_sc=dt.fit.131(feature="sc")
+```
+```{r}
+dt_sc$mse
+```
+```{r}
+dt_fc=dt.fit.131(feature="fc")
+dt_fc$mse
+```
+```{r}
+dt_all=dt.fit.131(feature="all")
+dt_all$mse
+```
+
+decision tree 130
+```{r}
+fit.dt.130=function(feature="all"){
+  aucs=vector()
+  final_tree=NULL
+  tree=NULL
+  best=0
+  amount=0
+ for (number in 1:59){
+  if(feature == "fc"){ 
+    
+   
+      df_train = cbind(train_oversampling[,c(2:(2+number))],train_oversampling[,length(train_oversampling)])
+    
+    df_test = cbind(testset[,c(2:(2+number))], testset[,length(testset)])
+    
+    
+  }else if(feature == "sc"){
+    df_train = cbind(train_oversampling[,c(62:(62+number))],train_oversampling[,length(train_oversampling)])
+    
+      df_test = cbind(testset[,c(62:(62+number))], testset[,length(testset)])
+  }else{
+   
+   df_train = cbind(train_oversampling[,c(2:(2+number),62:(62+number))], train_oversampling[,length(train_oversampling)])
+    
+   df_test = cbind(testset[,c(2:(2+number),62:(62+number))], testset[,length(testset)])
+  }
+ 
+
+  colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
+   colnames(df_test)[dim(df_test)[2]] = "Depressive_Ep"
+  df_test = na.omit(df_test)
+  
+  tree=train(Depressive_Ep ~ ., 
+                  data=df_train, 
+                  method="rpart", 
+                  trControl = trainControl(method = "cv"))
+  
+ 
+  
+  
+  predict=predict( tree, newdata = df_test[,1:length(df_test)-1], type = "prob")
+
+raw=predict( tree, newdata = df_test[,1:length(df_test)-1], type = "raw")
+auc=auc(df_test$Depressive_Ep,predict[,1])
+aucs=c(aucs,auc)
+
+if (auc>best){
+  best=auc
+   mod <- roc(df_test$Depressive_Ep, predict[,1]) # Draw ROC curve.
+  amount=number
+  final_tree<-tree
+  
+}
+
+ }
+
+plot(mod, auc.polygon=TRUE,print.thres="best", print.thres.best.method="closest.topleft")
+
+
+
+result.coords <- coords(mod, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+print(result.coords)#to get threshold and accuracy
+return (list(mod=tree,aucs=aucs,num=amount,auc=best))
+}
+
+```
+```{r}
+result_all=fit.dt.130(feature="all")
+```
+
+
+
+
+```{r}
+plot(result_all$aucs)
+lines(result_all$aucs)
+result_all$mod
+result_all$num
+result_all$auc
+```
+```{r}
+
+```
+
+
+
+```{r}
+result_fc=fit.dt.130(feature="fc")
+```
+```{r}
+plot(result_fc$aucs)
+lines(result_fc$aucs)
+result_fc$mod
+result_fc$num
+result_fc$auc
+```
+
+```{r}
+result_sc=fit.dt.130(feature="sc")
+```
+```{r}
+plot(result_sc$aucs)
+lines(result_sc$aucs)
+result_sc$mod
+result_sc$num
+result_sc$auc
+```
+
+```{r}
+ summary(tree$finalModel)
+  
+  plot(tree$finalModel, uniform=TRUE,main="Classification Tree")
+  text(tree$finalModel, all=TRUE, cex=.8)
+```
+
+
+# Define Random Forest Model 131
+```{r}
+rf.fit.131 = function(index_trait, feature = "all"){
   if(feature == "fc"){ 
     df.rf = cbind(df[,c(2:61)], df[,121+index_trait])
   }else if(feature == "sc"){
@@ -37,79 +212,64 @@ rf.fit = function(index_trait, feature = "all"){
 
   df_train = df.rf[-index,]
   df_test = df.rf[index,]
+
   
 
 
   
  
-  
- 
-  
-  if(feature == "fc"){
-   rf_classifier = randomForest(Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3+FCfeature_4,data=df_train, ntree=100, mtry=2, importance=TRUE)
-    summary(rf_classifier)
-    rf.pred = predict(rf_classifier, df_test[,c(1:4)])
-  }else if(feature == "sc"){
-     rf_classifier = randomForest(Depressive_Ep~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, ntree=100, mtry=2, importance=TRUE)
-    summary(rf_classifier)
-    rf.pred = predict(rf_classifier, df_test[,c(1:3)])
-  }else{
-     df_train=cbind(df_train[,c(2:31)],df_train[,c(62:91)],df_train[,length(df_train)])
-      colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
-     rf_classifier = randomForest(Depressive_Ep~., data = df_train, ntree=500,  mtry=2,importance=TRUE)
-     
-    summary(rf_classifier)
-    test_data=cbind(df_test[,c(2:31)],df_test[,c(62:91)])
-    
-    
-    print(dim(test_data)) #343  60
-    rf.pred = predict(rf_classifier, data =test_data )
-    print(length(rf.pred))#685
-  }
+#10 folds repeat 3 times
+control <- trainControl(method='repeatedcv', 
+                        number=10, 
+                        repeats=3)
+#Metric compare model is Accuracy
+metric <- "RMSE"
+set.seed(123)
+#Number randomely variable selected is mtry
+mtry <- sqrt(ncol(df_train))
+tunegrid <- expand.grid(.mtry=mtry)
+rf_default <- train(Depressive_Ep ~., 
+                      data=df_train, 
+                      method='rf', 
+                      metric=metric, 
+                      tuneGrid=tunegrid, 
+                      trControl=control)
 
   
-    #mse = mean((rf.pred - df_test$Depressive_Ep)^2)
-    
-   # return(list(mod = rf_classifier, mse = mse))
-
+   raw=predict(rf_default, newdata = df_test[,1:length(df_test)-1], type = "raw")
   
   
-  
-  
+   mse= mean(( raw - df_test$Depressive_Ep)^2)
+   
+   print(mse)
     
    
 }
 ```
 ```{r}
-rf.fit(131, feature = "all")
+rf.fit.131(131, feature = "all")
 ```
 
-```{r}
-rf.fit(131, feature = "sc")
-```
-```{r}
-rf.fit(131, feature = "fc")
-```
 
 ```{r}
-
-train_oversampling[,length(train_oversampling)]
+rf.fit.131(131, feature = "sc")
 ```
+```{r}
+rf.fit.131(131, feature = "fc")
+```
+forest 130
 
 ```{r}
-dt.fit = function(index_trait=130, feature = "all"){
+rf.fit.130 = function(index_trait=130, feature = "all"){
   if(feature == "fc"){ 
     df_train = cbind(train_oversampling[,c(2:61)], train_oversampling[,length(train_oversampling)])
-    
     df_test = cbind(testset[,c(2:61)], testset[,length(testset)])
   }else if(feature == "sc"){
     df_train = cbind(train_oversampling[,c(62:121)], train_oversampling[,length(train_oversampling)])
-    
-      df_test = cbind(testset[,c(62:121)], testset[,length(testset)])
+    df_test = cbind(testset[,c(62:121)], testset[,length(testset)])
   }else{
    df_train = cbind(train_oversampling[,c(2:121)], train_oversampling[,length(train_oversampling)])
-   
-     df_test = cbind(testset[,c(2:121)], testset[,length(testset)])
+   df_test = cbind(testset[,c(2:121)], testset[,length(testset)])
   }
 
   colnames(df_train)[dim(df_train)[2]] = "Depressive_Ep"
@@ -117,43 +277,76 @@ dt.fit = function(index_trait=130, feature = "all"){
   df_test = na.omit(df_test)
   
 
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+seed <- 7
+metric <- "Accuracy"
+set.seed(seed)
   
-  
-  if(feature == "fc"){
-  
-    decision_tree=rpart(
-  Depressive_Ep ~ FCfeature_1+FCfeature_2+FCfeature_3, 
-  data = df_train,method="class")
-    summary( decision_tree)
-    dt.pred = predict(decision_tree, df_test[,c(1:3)])
-  }else if(feature == "sc"){
-     decision_tree = rpart(as.factor(Depressive_Ep)~SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="class")
-    summary(rf_classifier)
-   dt.pred = predict(decision_tree, df_test[,c(1:3)])
-  }else{
-     decision_tree = randomForest(as.factor(Depressive_Ep)~FCfeature_1+FCfeature_2+FCfeature_3+SCfeature_1+SCfeature_2+SCfeature_3, data = df_train, method="class")
-    summary(decision_tree)
-    dt.pred = predict(decision_tree, df_test[,c(1:3, 61:63)])
-  }
-   
+  tunegrid <- expand.grid(.mtry=c(1:15))
+rf_gridsearch <- train(Depressive_Ep~., data=df_train, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
+print(rf_gridsearch)
+
+plot(rf_gridsearch)
+
+
+predict.rf=predict(rf_gridsearch, newdata = df_test[,1:length(df_test)-1], type = "prob")
+
+raw=predict(rf_gridsearch, newdata = df_test[,1:length(df_test)-1], type = "raw")
+
+
+result.roc <- roc(df_test$Depressive_Ep, predict.rf[,1]) # Draw ROC curve.
+
+plot(result.roc, auc.polygon=TRUE,print.thres="best", print.thres.best.method="closest.topleft")
+
+result.coords <- coords(result.roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+print(result.coords)#to get threshold and accuracy
+auc=auc(df_test$Depressive_Ep,predict.rf[,1])
+
+return (list(auc=auc,search=rf_gridsearch))
 
   
-   
-    accuracy = sum((dt.pred==df_test$Depressive_Ep))/length(dt.pred)
-    recall=
-    
-    return(list(mod = decision_tree,accuracy=accuracy))
-  
-    
-   
 }
+   
 ```
+```{r}
+rf_gridsearch_all=rf.fit.130 (feature="all")
+```
+```{r}
+rf_gridsearch$auc
+plot(rf_gridsearch$search)
+```
+
+
+
 
 ```{r}
-dt.fit(130, feature = "all")
+rf_gridsearch=rf.fit.130 (feature="sc")
+```
+```{r}
+plot(rf_gridsearch)
 ```
 
 
+<<<<<<< HEAD
+```{r}
+rf_gridsearch=rf.fit.130(feature="fc")
+```
+```{r}
+plot(rf_gridsearch$search)
+print(rf_gridsearch$auc)
+```
+
+
+
+
+
+
+
+
+
+`
+
+=======
 #### decision tree 
 
 ```{r}
@@ -234,4 +427,5 @@ summary(dt)
 dt.pred<-predict(dt,testset)
 mean((dt.pred-testset$Trait_131)^2)
 ```
+>>>>>>> 8a58038790c14af3051fc49c14ab33623470435c
 
