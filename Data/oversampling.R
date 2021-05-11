@@ -32,7 +32,6 @@ imbalanceRatio(trainset,"Trait_130")
 set.seed(893)
 train_smote <- mwmote(trainset, numInstances = 200, classAttr="Trait_130")
 train_oversampling<-rbind(trainset,train_smote)
-#save(df_dep_oversampling, file = "oversampling_df.RData")
 
 
 #plot the difference between original dataset and oversampling dataset by using the first two FC feature scores and first two SC feature scores
